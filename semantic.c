@@ -54,7 +54,7 @@ void semantic_error();
 // A_NODE *makeNode(NODE_NAME,A_NODE *, A_NODE *, A_NODE *);
 extern A_TYPE *int_type,*float_type, *char_type, *string_type, *void_type;   //하기로 한 type을 추가하였다.
 int global_address=12; // 초기 주소
-// int semantic_err=0;
+int semantic_err=0; // 추가(main 함수에서 필요)
 
 // 리터럴 테이블 추가
 #define LIT_MAX 100
@@ -1134,7 +1134,7 @@ A_LITERAL getTypeAndValueOfExpression(A_NODE *node)
 // 		return(result);
 // }
 
-void semantic_error(int i, int ll)
+void semantic_error(int i, int ll, char *s)
 {
 		printf("*** semantic error at line %d: ",ll);
 		switch (i) {
@@ -1145,6 +1145,9 @@ void semantic_error(int i, int ll)
 			case 18:
 					printf("illegal constant expression \n");
 					break;
+			case 19:
+			printf("illegal identifier %s in constant expression\n",s);
+			break;
 			case 21:
 					printf("illegal type in function call expression\n");
 					break; 
@@ -1175,6 +1178,9 @@ void semantic_error(int i, int ll)
 			case 37:
 					printf("illegal struct field identifier in struct reference expr\n");
 					break; 
+			case 38:
+					printf("illegal kind of identifier %s in expression\n",s);
+					break;
 			case 39:
 					printf("illegal type size in sizeof operation\n");
 					break; 
@@ -1240,6 +1246,9 @@ void semantic_error(int i, int ll)
 			case 86:
 					printf("illegal array size or empty array \n");
 					break; 
+			case 89:
+					printf("unknown identifier kind: %s\n",s);
+					break;	
 		// misc errors
 			case 90:
 					printf("fatal compiler error in parse result\n");
@@ -1248,17 +1257,4 @@ void semantic_error(int i, int ll)
 					printf("too many literals in source program \n");
 					break; 
 		}
-}
-
-void semantic_error(int i, int ll, char *s){
-	switch(i){
-		case 19:
-			printf("illegal identifier %s in constant expression\n",s);
-			break;
-		case 38:
-			printf("illegal kind of identifier %s in expression\n",s);
-			break;
-		case 89:
-			printf("unknown identifier kind: %s\n",s);
-	}
 }

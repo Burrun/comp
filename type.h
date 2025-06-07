@@ -152,6 +152,30 @@ BOOLEAN isPointerOrArrayType(A_TYPE *);
 void syntax_error();
 void initialize();
 
+
+
+//print_sem.c ... 추가하였음
+void print_sem_ast(A_NODE *);
+void prt_sem_program(A_NODE *, int);
+void prt_sem_initializer(A_NODE *, int);
+void prt_sem_arg_expr_list(A_NODE *, int);
+void prt_sem_statement(A_NODE *, int);
+void prt_sem_statement_list(A_NODE *, int);
+void prt_sem_for_expression(A_NODE *, int);
+void prt_sem_expression(A_NODE *, int);
+void prt_sem_A_TYPE(A_TYPE *, int);
+void prt_sem_A_ID_LIST(A_ID *, int);
+void prt_sem_A_ID(A_ID *, int);
+void prt_sem_A_ID_NAME(A_ID *, int);
+void prt_sem_LITERAL(int, int);
+void prt_sem_integer(int, int);
+extern A_LITERAL literal_table[];
+extern A_TYPE *int_type, *float_type, *char_type, *void_type, *string_type;
+void print_space(int);
+void print_node(A_NODE *,int);
+
+
+
 //print.c
 
 void print_ast(A_NODE *);
@@ -170,5 +194,9 @@ void prt_STRING(char *, int);
 void prt_integer(int, int);
 void print_node(A_NODE *,int);
 void print_space(int);
+
+
+
+
 
 #endif
