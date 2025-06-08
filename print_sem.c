@@ -1,4 +1,5 @@
 #include "type.h"
+#include <string.h> // 추가
 
 extern char * node_name[];
 extern char *type_kind_name[];
@@ -25,8 +26,8 @@ void prt_sem_integer(int, int);
 extern A_LITERAL literal_table[];
 extern A_TYPE *int_type, *float_type, *char_type, *void_type, *string_type;
 
-print_space(int);
-print_node(A_NODE *,int);
+void print_space(int);    //수정
+void print_node(A_NODE *,int);  //수정
 
 void print_sem_ast(A_NODE *node) 
 {

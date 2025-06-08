@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <string.h> // 추가
 #include "type.h"
 
 //_TYPE *sem_initailizer(A_NODE *); -- 안한다고 했음
@@ -8,7 +9,7 @@ void set_literal_address(A_NODE *);
 int put_literal(A_LITERAL, int);
 void sem_program(A_NODE *);
 A_TYPE *sem_expression(A_NODE *);
-int sem_statement(A_NODE *, int, A_TYPE *, BOOLEAN, BOOLEAN,BOOLEAN);
+int sem_statement(A_NODE *, int, A_TYPE *, BOOLEAN, BOOLEAN, BOOLEAN);
 int sem_statement_list(A_NODE *, int, A_TYPE *, BOOLEAN, BOOLEAN,BOOLEAN);
 void sem_for_expression(A_NODE *);
 int sem_A_TYPE(A_TYPE *);
@@ -39,7 +40,7 @@ BOOLEAN isStructOrUnionType(A_TYPE *);
 BOOLEAN isFunctionType(A_TYPE *);
 BOOLEAN isScalarType(A_TYPE *);
 BOOLEAN isPointerType(A_TYPE *);
-BOOLEAN isPointerOrArrayType(A_TYPE *);
+BOOLEAN isPointerOrArrayType2(A_TYPE *);
 BOOLEAN isArrayType(A_TYPE *);
 BOOLEAN isStringType(A_TYPE *);
 BOOLEAN isVoidType(A_TYPE *);
@@ -50,7 +51,7 @@ A_TYPE *setTypeElementType(A_TYPE *,A_TYPE *);
 A_TYPE *makeType(T_KIND);
 void setTypeSize(A_TYPE *,int);
 void semantic_warning(int, int);
-void semantic_error();
+void semantic_error(); // 이부분에서 문제를 일으킴 - 선언, 정의 , 호출이 서로 맞지 않음
 A_NODE *makeNode(NODE_NAME,A_NODE *, A_NODE *, A_NODE *);
 extern A_TYPE *int_type,*float_type, *char_type, *string_type, *void_type; 
 int global_address=12; // 초기 주소
@@ -163,7 +164,7 @@ A_TYPE *sem_expression(A_NODE *node)
 						t=convertUsualBinaryConversion(node);
 						t1=node->llink->type;
 						t2=node->rlink->type;
-						if(isPointerOrArrayType(t1))
+						if(isPointerOrArrayType2(t1))
 								result=t1->element_type;
 						else
 								semantic_error(32,node->line);
@@ -835,7 +836,7 @@ A_NODE *convertUsualUnaryConversion(A_NODE *node){
 		else if(isArrayType(t)){
 				t=setTypeElementType(makeType(T_POINTER),t->element_type);
 				t->size=4;
-				node-=makeNode(N_EXP_CAST,t,NIL,node);
+				node=makeNode(N_EXP_CAST,t,NIL,node);
 				node->type=t;
 		}
 		else if(isFunctionType(t)){
@@ -948,7 +949,7 @@ BOOLEAN isPointerType(A_TYPE *t){
 		else
 				return(FALSE);
 }
-BOOLEAN isPointerOrArrayType(A_TYPE *t){
+BOOLEAN isPointerOrArrayType2(A_TYPE *t){
 		if(t&&(t->kind==T_POINTER||t->kind==T_ARRAY))
 				return (TRUE);
 		else
@@ -1155,10 +1156,10 @@ A_LITERAL getTypeAndValueOfExpression(A_NODE *node)
 				case N_EXP_AND : 
 				case N_EXP_OR : 
 				case N_EXP_ASSIGN :
-					semantic_error(18,node->line); 
+					semantic_error(18,node->line,NIL); 
 					break;
 				default :
-					semantic_error(90,node->line);
+					semantic_error(90,node->line,NIL);
 					break; 
 		}
 		return (result);

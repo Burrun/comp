@@ -439,6 +439,7 @@ BOOLEAN isNotSameType(A_TYPE *t1, A_TYPE *t2){
 				return(t1 !=t2);
 }
 
+
 BOOLEAN isPointerOrArrayType(A_TYPE *t){
 		if(t&&(t->kind==T_POINTER || t->kind==T_ARRAY))
 				return (TRUE);
@@ -476,10 +477,10 @@ void syntax_error(int i,char *s){
 		syntax_err++;
 		printf("line %d: syntax error: ",line_no);
 		switch(i){
-				case 11: //
+				case 11: 
 						printf("illegal referencing struct or union identifier %s",s);
 						break;
-				case 12: //
+				case 12: 
 						printf("redeclaration of identifier %s",s);
 						break;
 				case 13:
