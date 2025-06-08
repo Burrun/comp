@@ -1,18 +1,20 @@
 #include <stdio.h>
 #include "type.h"
 
-// float atof();
+//_TYPE *sem_initailizer(A_NODE *); -- 안한다고 했음
+float atof();
 void semantic_analysis(A_NODE *);
+void set_literal_address(A_NODE *);
+int put_literal(A_LITERAL, int);
 void sem_program(A_NODE *);
-int sem_declaration_list(A_ID *, int);
-int sem_declaration(A_ID *,int);
-int sem_A_TYPE(A_TYPE *);
 A_TYPE *sem_expression(A_NODE *);
 int sem_statement(A_NODE *, int, A_TYPE *, BOOLEAN, BOOLEAN,BOOLEAN);
 int sem_statement_list(A_NODE *, int, A_TYPE *, BOOLEAN, BOOLEAN,BOOLEAN);
 void sem_for_expression(A_NODE *);
-//////// A_TYPE *sem_initailizer(A_NODE *); -- 안한다고 했음
-void sem_arg_expression_list(A_NODE *,A_ID * );
+int sem_A_TYPE(A_TYPE *);
+int sem_declaration_list(A_ID *, int);
+int sem_declaration(A_ID *,int);
+void sem_arg_expr_list(A_NODE *,A_ID * );
 A_ID *getStructFieldIdentifier(A_TYPE *, char *);
 A_ID *getPointerFieldIdentifier(A_TYPE *, char *);
 A_NODE *convertScalarToInteger(A_NODE *);
@@ -37,24 +39,22 @@ BOOLEAN isStructOrUnionType(A_TYPE *);
 BOOLEAN isFunctionType(A_TYPE *);
 BOOLEAN isScalarType(A_TYPE *);
 BOOLEAN isPointerType(A_TYPE *);
-BOOLEAN isPointerOrArrayType2(A_TYPE *);
+BOOLEAN isPointerOrArrayType(A_TYPE *);
 BOOLEAN isArrayType(A_TYPE *);
 BOOLEAN isStringType(A_TYPE *);
 BOOLEAN isVoidType(A_TYPE *);
 A_LITERAL checkTypeAndConvertLiteral(A_LITERAL,A_TYPE *, int);	
-A_LITERAL checkTypeAndConvertLiteral(A_LITERAL,A_TYPE *);
+A_LITERAL checkTypeAndConvertLiteral(A_LITERAL,A_TYPE *, int);
 A_LITERAL getTypeAndValueOfExpression(A_NODE*);
-int put_literal(A_LITERAL);
-void set_literal_address(A_NODE *);
-// A_TYPE *setTypeElementType(A_TYPE *,A_TYPE *);
-// A_TYPE *makeType(T_KIND);
-// void setTypeSize(A_TYPE *,int);
-// void semantic_warning(int, int);
+A_TYPE *setTypeElementType(A_TYPE *,A_TYPE *);
+A_TYPE *makeType(T_KIND);
+void setTypeSize(A_TYPE *,int);
+void semantic_warning(int, int);
 void semantic_error();
-// A_NODE *makeNode(NODE_NAME,A_NODE *, A_NODE *, A_NODE *);
-extern A_TYPE *int_type,*float_type, *char_type, *string_type, *void_type;   //하기로 한 type을 추가하였다.
+A_NODE *makeNode(NODE_NAME,A_NODE *, A_NODE *, A_NODE *);
+extern A_TYPE *int_type,*float_type, *char_type, *string_type, *void_type; 
 int global_address=12; // 초기 주소
-int semantic_err=0; // 추가(main 함수에서 필요)
+int semantic_err=0; 
 
 // 리터럴 테이블 추가
 #define LIT_MAX 100
@@ -66,18 +66,6 @@ void semantic_analysis(A_NODE *node)
 		sem_program(node);
 		set_literal_address(node);
 }
-
-void sem_program(A_NODE *node)
-{
-		switch(node->name) { 
-				case N_PROGRAM :
-						sem_declaration_list(node->clink,12);
-						node->value=global_address;
-						break;
-		}
-}
-
-// 리터럴 테이블 주소 설정 - 추가함 - 없었음 
 void set_literal_address(A_NODE *node)
 {
 		int i;
@@ -86,159 +74,39 @@ void set_literal_address(A_NODE *node)
 		node->value+=literal_size;
 }
 
-int sem_declaration_list(A_ID *id, int addr)
+void sem_program(A_NODE *node)
 {
-		int i=addr;
-		while (id) {
-				addr+=sem_declaration(id,addr);
-				id=id->link;
+		int i;
+		switch(node->name) { 
+				case N_PROGRAM :
+						i=sem_declaration_list(node->clink,12);
+						node->value=global_address;
+						break;
+				default:
+						semantic_error(90,node->line);
+						break;
 		}
-		return(addr-i);
 }
 
 
-int sem_declaration(A_ID *id, int addr)
+int put_literal(A_LITERAL lit, int ll)
 {
-		A_TYPE *t;
-		int result=0,i;
-		A_LITERAL lit;
-		switch (id->kind) { 
-				case ID_VAR: 
-						i=sem_A_TYPE(id->type);
-						if(isArrayType(id->type)&&id->type->expr==NIL)
-								semantic_error(86,id->line);
-						if(i%4)
-								i=i/4*4+4;
-						if(id->specifier==S_STATIC)
-								id->level=0;
-						if(id->level==0){
-								id->address=global_address;
-								global_address+=i;
-						}
-						else{
-								id->address=addr;
-								result=i;
-						}
-						break;
-				case ID_FIELD: 
-						i=sem_A_TYPE(id->type);
-						if(isFunctionType(id->type)||isVoidType(id->type))
-								semantic_error(84,id->line);
-						if(i%4)
-								i=i/4*4+4;
-						id->address=addr;
-						result=i;
-						break;
-				case ID_FUNC: 
-						i=sem_A_TYPE(id->type);
-						break;
-				case ID_PARM: 
-						if(id->type){
-								result=sem_A_TYPE(id->type);
-								if(id->type==char_type)
-										id->type=int_type;
-								else if(isArrayType(id->type)){
-										id->type->kind=T_POINTER;
-										id->type->size=4;
-								}
-								else if(isFunctionType(id->type)){
-										t=makeType(T_POINTER);
-										t->element_type=id->type;
-										t->size=4;
-										id->type=t;
-								}
-								result=id->type->size;
-								if(result%4)
-										result=result/4*4+4;
-								id->address=addr;
-						}
-						break;
-				case ID_TYPE:
-						i=sem_A_TYPE(id->type);
-						break;
-		}
-		return(result);
+		float ff;
+		if (literal_no >=LIT_MAX)
+			semantic_error(93, ll);
+		else
+			literal_no++;
+		literal_table[literal_no]=lit;
+		literal_table[literal_no].addr=literal_size;
+		if (lit.type->kind==T_ENUM)
+			literal_size+=4;
+		else if (isStringType(lit.type))
+			literal_size+=strlen(lit.value.s)+1;
+		if (literal_size%4)
+			literal_size=literal_size/4*4+4;
+		return(literal_no);
 }
 
-
-int sem_A_TYPE(A_TYPE *t)
-{
-		A_ID *id;
-		A_TYPE *tt;
-		A_LITERAL lit;
-		int result=0,i;
-		if(t->check)
-				return(t->size);
-		t->check=1;
-		switch (t->kind) { 
-		 		case T_ENUM:
-						i=0;
-						id=t->field;
-						while(id){
-								if(id->init){
-										lit=getTypeAndValueOfExpression(id->init);
-										if(!isIntType(lit.type))
-												semantic_error(81,id->line);
-										i=lit.value.i;
-								}
-								id->init=i++;
-								id=id->link;
-						}
-						result=4;
-						break;
-		 		case T_ARRAY:
-						if(t->expr){
-								lit=getTypeAndValueOfExpression(t->expr);
-								if(!isIntType(lit.type)||lit.value.i<=0){
-										semantic_error(82,t->line);
-										t->expr=0;
-								}
-								else
-										t->expr=lit.value.i;
-						}
-						i=sem_A_TYPE(t->element_type)*(int)t->expr;
-						if(isVoidType(t->element_type)||isFunctionType(t->element_type))
-								semantic_error(83,t->line);
-						else
-								result=i;
-						break;
-		 		case T_STRUCT: 
-						id=t->field;
-						while(id){
-								result+=sem_declaration(id,result);
-								id=id->link;
-						}
-						break;
-				case T_UNION: 
-						id=t->field;
-						while(id){
-								i=sem_declaration(id,0);
-								if(i>result)
-										result=i;
-								id=id->link;
-						}
-						break;
-				case T_FUNC:
-						tt=t->element_type;
-						i=sem_A_TYPE(tt);
-						if(isArrayType(tt)||isFunctionType(tt))
-								semantic_error(85,t->line);
-						i=sem_declaration_list(t->field,12)+12;
-						if(t->expr){
-								i=i+sem_statement(t->expr,i,t->element_type,FALSE,FALSE,FALSE);
-						}
-						t->local_var_size=i;
-						break;
-		 		case T_POINTER:
-						i=sem_A_TYPE(t->element_type);
-						result=4;
-						break;
-				case T_VOID:
-						break;
-		}
-		t->size=result;
-		return(result);
-}
 
 
 A_TYPE *sem_expression(A_NODE *node)
@@ -247,8 +115,8 @@ A_TYPE *sem_expression(A_NODE *node)
 		 A_TYPE *t,*t1,*t2;
 		A_ID *id;
 		A_LITERAL lit;
-		int lvalue=0;
-		int i; //없어서 추가함
+		int i; 
+		BOOLEAN lvalue=FALSE;
 
 		switch(node->name) { 
 				case N_EXP_IDENT :
@@ -295,7 +163,7 @@ A_TYPE *sem_expression(A_NODE *node)
 						t=convertUsualBinaryConversion(node);
 						t1=node->llink->type;
 						t2=node->rlink->type;
-						if(isPointerOrArrayType2(t1))
+						if(isPointerOrArrayType(t1))
 								result=t1->element_type;
 						else
 								semantic_error(32,node->line);
@@ -311,7 +179,7 @@ A_TYPE *sem_expression(A_NODE *node)
 								result=id->type;
 								if(node->llink->value && !isArrayType(result))
 										lvalue=TRUE;
-						}else
+						} else
 								semantic_error(37,node->line);
 						node->rlink=id;
 						break;
@@ -347,7 +215,7 @@ A_TYPE *sem_expression(A_NODE *node)
 						break;
 				case N_EXP_CAST : 
 						result=node->llink;
-						result=sem_A_TYPE(result);   //이 에러는 어떻게 해결?? 
+						i=sem_A_TYPE(result);    
 						t=sem_expression(node->rlink);
 						if(!isAllowableCastingConversion(result,t))
 								semantic_error(58,node->line);
@@ -502,16 +370,20 @@ A_TYPE *sem_expression(A_NODE *node)
 						}else
 								semantic_error(58,node->line);
 						break;
+				default:
+						semantic_error(90,node->line);
+						break;
 		}
 		node->type=result;
 		node->value=lvalue;
 		return(result);
 }
-void sem_arg_expression_list(A_NODE *node,A_ID *id){ 
-/*구문 분석기 중에서 arg부분인데, 주소는 무조건 4의 배수라고 설정하라고 배웠는데
- 그 부분이 없어서 수정해야한다고 느꼈음 */
+
+void sem_arg_expr_list(A_NODE *node,A_ID *id)
+{ 
 		A_TYPE *t;
 		A_ID *a;
+		int arg_size=0;
 		switch(node->name){
 				case N_ARG_LIST:
 						if(id==0)
@@ -530,6 +402,7 @@ void sem_arg_expression_list(A_NODE *node,A_ID *id){
 										t=sem_expression(node->llink);
 										sem_arg_expr_list(node->rlink,id);
 								}
+								arg_size=node->llink->type->size+node->rlink->value;
 						}
 						break;
 				case N_ARG_LIST_NIL:
@@ -540,14 +413,17 @@ void sem_arg_expression_list(A_NODE *node,A_ID *id){
 						semantic_error(90,node->line);
 						break;
 		}
+		if(arg_size%4)
+			arg_size=arg_size/4*4+4;
+		node->value=arg_size;   // 주소를 4의 배수로 설정하는 부분
 }
 
-// BOOLEAN isModifiableLvalue(A_NODE *node){
-// 		if(node->value==FALSE||isVoidType(node->type)||isFunctionType(node->type))
-// 				return(FALSE);
-// 		else
-// 				return(TRUE);
-// }
+BOOLEAN isModifiableLvalue(A_NODE *node){
+		if(node->value==FALSE||isVoidType(node->type)||isFunctionType(node->type))
+				return(FALSE);
+		else
+				return(TRUE);
+}
 
 int sem_statement(A_NODE *node, int addr, A_TYPE *ret, BOOLEAN sw, BOOLEAN brk, BOOLEAN cnt)
 {
@@ -637,37 +513,18 @@ int sem_statement(A_NODE *node, int addr, A_TYPE *ret, BOOLEAN sw, BOOLEAN brk, 
 				case N_STMT_RETURN:
 						if(node->clink)
 								t=sem_expression(node->clink);
-				// 		if(isAllowableCastingConversion(ret,t))
-				// 				node->clink=convertCastingConversion(node->clink,ret);
-				// 		else
-				// 				semantic_error(57,node->line);
-				// 		break;
-				// default:
-				// 		semantic_error(90,node->line);
-				// 		break;
+						if(isAllowableCastingConversion(ret,t))
+								node->clink=convertCastingConversion(node->clink,ret);
+						else
+								semantic_error(57,node->line);
+						break;
+				default:
+						semantic_error(90,node->line);
+						break;
 		}
 		node->value=local_size;
 		return(local_size);
 }
-
-int sem_statement_list(A_NODE *node, int addr, A_TYPE *ret, BOOLEAN sw, BOOLEAN brk, BOOLEAN cnt)
-{
-		int size,i;
-		switch(node->name) { 
-				case N_STMT_LIST: 
-						size=sem_statement(node->llink,addr,ret,sw,brk,cnt);
-						i=sem_statement_list(node->rlink,addr,ret,sw,brk,cnt);
-						if(size<i)
-								size=i;
-						break;
-				case N_STMT_LIST_NIL:
-						size=0;
-						break;
-		}
-		node->value=size;
-		return(size);
-}
-
 
 void sem_for_expression(A_NODE *node)
 {
@@ -686,26 +543,463 @@ void sem_for_expression(A_NODE *node)
 						if(node->rlink)
 								t=sem_expression(node->rlink);
 						break;
-
+				default:
+						semantic_error(90,node->line);
+						break;
 		}
 }
 
-int put_literal(A_LITERAL lit, int ll)
+
+int sem_statement_list(A_NODE *node, int addr, A_TYPE *ret, BOOLEAN sw, BOOLEAN brk, BOOLEAN cnt)
 {
-		float ff;
-		if (literal_no >=LIT_MAX)
-			semantic_error(93, ll);
+		int size,i;
+		switch(node->name) { 
+				case N_STMT_LIST: 
+						size=sem_statement(node->llink,addr,ret,sw,brk,cnt);
+						i=sem_statement_list(node->rlink,addr,ret,sw,brk,cnt);
+						if(size<i)
+								size=i;
+						break;
+				case N_STMT_LIST_NIL:
+						size=0;
+						break;
+				default:
+						semantic_error(90,node->line);
+						break;
+		}
+		node->value=size;
+		return(size);
+}
+
+
+int sem_A_TYPE(A_TYPE *t)
+{
+		A_ID *id;
+		A_TYPE *tt;
+		A_LITERAL lit;
+		int result=0,i;
+		if(t->check)
+				return(t->size);
+		t->check=1;
+		switch (t->kind) {
+			case T_NULL:
+					semantic_error(80,t->line);
+					break;
+		 		case T_ENUM:
+						i=0;
+						id=t->field;
+						while(id){
+								if(id->init){
+										lit=getTypeAndValueOfExpression(id->init);
+										if(!isIntType(lit.type))
+												semantic_error(81,id->line);
+										i=lit.value.i;
+								}
+								id->init=i++;
+								id=id->link;
+						}
+						result=4;
+						break;
+		 		case T_ARRAY:
+						if(t->expr){
+								lit=getTypeAndValueOfExpression(t->expr);
+								if(!isIntType(lit.type)||lit.value.i<=0){
+										semantic_error(82,t->line);
+										t->expr=0;
+								}
+								else
+										t->expr=lit.value.i;
+						}
+						i=sem_A_TYPE(t->element_type)*(int)t->expr;
+						if(isVoidType(t->element_type)||isFunctionType(t->element_type))
+								semantic_error(83,t->line);
+						else
+								result=i;
+						break;
+
+		 		case T_STRUCT: 
+						id=t->field;
+						while(id){
+								result+=sem_declaration(id,result);
+								id=id->link;
+						}
+						break;
+				case T_UNION: 
+						id=t->field;
+						while(id){
+								i=sem_declaration(id,0);
+								if(i>result)
+										result=i;
+								id=id->link;
+						}
+						break;
+				case T_FUNC:
+						tt=t->element_type;
+						i=sem_A_TYPE(tt);
+						if(isArrayType(tt)||isFunctionType(tt))
+								semantic_error(85,t->line);
+						i=sem_declaration_list(t->field,12)+12;
+						if(t->expr){
+								i=i+sem_statement(t->expr,i,t->element_type,FALSE,FALSE,FALSE);
+						}
+						t->local_var_size=i;
+						break;
+		 		case T_POINTER:
+						i=sem_A_TYPE(t->element_type);
+						result=4;
+						break;
+				case T_VOID:
+						break;
+				default:
+						semantic_error(90,t->line);
+						break;
+		}
+		t->size=result;
+		return(result);
+}
+
+int sem_declaration_list(A_ID *id, int addr)
+{
+		int i=addr;
+		while (id) {
+				addr+=sem_declaration(id,addr);
+				id=id->link;
+		}
+		return(addr-i);
+}
+
+
+int sem_declaration(A_ID *id, int addr)
+{
+		A_TYPE *t;
+		int size=0,i;
+		A_LITERAL lit;
+		switch (id->kind) { 
+				case ID_VAR: 
+						i=sem_A_TYPE(id->type);
+						if(isArrayType(id->type)&&id->type->expr==NIL)
+								semantic_error(86,id->line);
+						if(i%4)
+								i=i/4*4+4;
+						if(id->specifier==S_STATIC)
+								id->level=0;
+						if(id->level==0){
+								id->address=global_address;
+								global_address+=i;
+						}
+						else{
+								id->address=addr;
+								size=i;
+						}
+						break;
+				case ID_FIELD: 
+						i=sem_A_TYPE(id->type);
+						if(isFunctionType(id->type)||isVoidType(id->type))
+								semantic_error(84,id->line);
+						if(i%4)
+								i=i/4*4+4;
+						id->address=addr;
+						size=i;
+						break;
+				case ID_FUNC: 
+						i=sem_A_TYPE(id->type);
+						break;
+				case ID_PARM: 
+						if(id->type){
+								size=sem_A_TYPE(id->type);
+								if(id->type==char_type)
+										id->type=int_type;
+								else if(isArrayType(id->type)){
+										id->type->kind=T_POINTER;
+										id->type->size=4;
+								}
+								else if(isFunctionType(id->type)){
+										t=makeType(T_POINTER);
+										t->element_type=id->type;
+										t->size=4;
+										id->type=t;
+								}
+								size=id->type->size;
+								if(size%4)
+										size=size/4*4+4;
+								id->address=addr;
+						}
+						break;
+				case ID_TYPE:
+						i=sem_A_TYPE(id->type);
+						break;
+				default:
+						semantic_error(89,id->line,id->name);  //여기만 왜 89?
+						break;
+		}
+		return(size);
+}
+
+
+
+
+
+A_ID *getStructFieldIdentifier(A_TYPE *t, char *s){
+		A_ID *id=NIL;
+		if(isStructOrUnionType(t)){
+				id=t->field;
+				while(id){
+						if(strcmp(id->name,s)==0)
+								break;
+						id=id->link;
+				}
+		}
+		return(id);
+}
+A_ID *getPointerFieldIdentifier(A_TYPE *t,char *s){
+		A_ID *id=NIL;
+		if(t&&t->kind==T_POINTER){
+				t=t->element_type;
+				if(isStructOrUnionType(t)){
+						id=t->field;
+						while(id){
+								if(strcmp(id->name,s)==0)
+										break;
+								id=id->link;
+						}
+				}
+		}
+		return(id);
+}
+BOOLEAN isSameParameterType(A_ID *a,A_ID *b){
+		while(a){
+				if(b==NIL||isNotSameType(a->type,b->type))
+						return(FALSE);
+				a=a->link;
+				b=b->link;
+		}
+		if(b)
+				return(FALSE);
 		else
-			literal_no++;
-		literal_table[literal_no]=lit;
-		literal_table[literal_no].addr=literal_size;
-		if (lit.type->kind==T_ENUM)
-			literal_size+=4;
-		else if (isStringType(lit.type))
-			literal_size+=strlen(lit.value.s)+1;
-		if (literal_size%4)
-			literal_size=literal_size/4*4+4;
-		return(literal_no);
+				return(TRUE);
+}
+BOOLEAN isCompatibleType(A_TYPE *t1,A_TYPE *t2){
+		if(isArrayType(t1)&&isArrayType(t2))
+				if(t1->size==0||t2->size==0||t1->size==t2->size)
+						return(isCompatibleType(t1->element_type,t2->element_type));
+				else
+						return(FALSE);
+		else if(isFunctionType(t1)&&isFunctionType(t2))
+				if(isSameParameterType(t1->field,t2->field))
+						return (isCompatibleType(t1->element_type,t2->element_type));
+				else
+						return(FALSE);
+		else if(isPointerType(t1)&&isPointerType(t2))
+				return(isCompatibleType(t1->element_type,t2->element_type));
+		else
+				return(t1==t2);
+}
+BOOLEAN isConstantZeroExp(A_NODE *node){
+		if(node->name==N_EXP_INT_CONST && node->clink==0)
+				return(TRUE);
+		else
+				return(FALSE);
+}
+BOOLEAN isCompatiblePointerType(A_TYPE *t1,A_TYPE *t2){
+		if(isPointerType(t1)&&isPointerType(t2))
+				return (isCompatibleType(t1->element_type,t2->element_type));
+		else
+				return(FALSE);
+}
+A_NODE *convertScalarToInteger(A_NODE *node){
+		if(isFloatType(node->type)){
+				semantic_warning(16,node->line);
+				node=makeNode(N_EXP_CAST,int_type,NIL,node);
+		}
+		node->type=int_type;
+		return(node);
+}
+A_NODE *convertUsualAssignmentConversion(A_TYPE *t1,A_NODE *node){
+		A_TYPE *t2;
+		t2=node->type;
+		if(!isCompatibleType(t1,t2)){
+				semantic_warning(11,node->line);
+				node=makeNode(N_EXP_CAST,t1,NIL,node);
+				node->type=t1;
+		}
+		return(node);
+}
+A_NODE *convertUsualUnaryConversion(A_NODE *node){
+		A_TYPE *t;
+		t=node->type;
+		if(t==char_type){
+				t=int_type;
+				node=makeNode(N_EXP_CAST,t,NIL,node);
+				node->type=t;
+		}
+		else if(isArrayType(t)){
+				t=setTypeElementType(makeType(T_POINTER),t->element_type);
+				t->size=4;
+				node-=makeNode(N_EXP_CAST,t,NIL,node);
+				node->type=t;
+		}
+		else if(isFunctionType(t)){
+				t=setTypeElementType(makeType(T_POINTER),t);
+				t->size=4;
+				node=makeNode(N_EXP_AMP,NIL,node,NIL);
+				node->type=t;
+		}
+		return(node);
+}
+A_TYPE *convertUsualBinaryConversion(A_NODE *node){
+		A_TYPE *t1,*t2,*result=NIL;
+		t1=node->llink->type;
+		t2=node->rlink->type;
+		if(isFloatType(t1)&&!isFloatType(t2)){
+				semantic_warning(14,node->line);
+				node->rlink=makeNode(N_EXP_CAST,t1,NIL,node->rlink);
+				node->rlink->type=t1;
+				result=t1;
+		}
+		else if(!isFloatType(t1)&&isFloatType(t2)){
+				semantic_warning(14,node->line);
+				node->llink=makeNode(N_EXP_CAST,t2,NIL,node->llink);
+				node->llink->type=t2;
+				result=t2;
+		}
+		else if(t1==t2)
+				result=t1;
+		else
+				result=int_type;
+		return(result);
+}
+A_NODE *convertCastingConversion(A_NODE *node, A_TYPE *t1){
+		A_TYPE *t2;
+		t2=node->type;
+		if(!isCompatibleType(t1,t2)){
+				semantic_warning(12,node->line);
+				node=makeNode(N_EXP_CAST,t1,NIL,node);
+				node->type=t1;
+		}
+		return(node);
+}
+BOOLEAN isAllowableAssignmentConversion(A_TYPE *t1,A_TYPE *t2,A_NODE *node){
+		if(isArithmeticType(t1)&&isArithmeticType(t2))
+				return(TRUE);
+		else if(isStructOrUnionType(t1)&&isCompatibleType(t1,t2))
+				return (TRUE);
+		else if(isPointerType(t1)&&(isConstantZeroExp(node)||isCompatiblePointerType(t1,t2)))
+				return (TRUE);
+		else
+				return(FALSE);
+}
+BOOLEAN isAllowableCastingConversion(A_TYPE *t1,A_TYPE *t2){
+		if(isAnyIntegerType(t1)&&(isAnyIntegerType(t2)||isFloatType(t2)||isPointerType(t2)))
+				return (TRUE);
+		else if(isFloatType(t1)&&isArithmeticType(t2))
+				return(TRUE);
+		else if(isPointerType(t1)&&(isAnyIntegerType(t2)||isPointerType(t2)))
+				return (TRUE);
+		else if(isVoidType(t1))
+				return(TRUE);
+		else
+				return(FALSE);
+}
+BOOLEAN isFloatType(A_TYPE *t){
+		if(t==float_type)
+				return (TRUE);
+		else
+				return(FALSE);
+}
+BOOLEAN isArithmeticType(A_TYPE *t){
+		if(t&&t->kind==T_ENUM)
+				return (TRUE);
+		else
+				return(FALSE);
+}
+BOOLEAN isScalarType(A_TYPE *t){
+		if(t&&((t->kind==T_ENUM)||(t->kind==T_POINTER)))
+				return (TRUE);
+		else
+				return(FALSE);
+}
+BOOLEAN isAnyIntegerType(A_TYPE *t){
+		if(t&&(t==int_type||t==char_type))
+				return(TRUE);
+		else
+				return(FALSE);
+}
+BOOLEAN isIntegralType(A_TYPE *t){
+		if(t && t->kind==T_ENUM && t!=float_type)
+				return (TRUE);
+		else
+				return(FALSE);
+}
+BOOLEAN isFunctionType(A_TYPE *t){
+		if(t && t->kind==T_FUNC)
+				return (TRUE);
+		else
+				return(FALSE);
+}
+BOOLEAN isStructOrUnionType(A_TYPE *t){
+		if(t&&(t->kind==T_STRUCT||t->kind==T_UNION))
+				return(TRUE);
+		else
+				return(FALSE);
+}
+BOOLEAN isPointerType(A_TYPE *t){
+		if(t&&t->kind==T_POINTER)
+				return(TRUE);
+		else
+				return(FALSE);
+}
+BOOLEAN isPointerOrArrayType(A_TYPE *t){
+		if(t&&(t->kind==T_POINTER||t->kind==T_ARRAY))
+				return (TRUE);
+		else
+				return(FALSE);
+}
+BOOLEAN isIntType(A_TYPE *t){
+		if(t&&t==int_type)
+				return(TRUE);
+		else
+				return(FALSE);
+}
+BOOLEAN isVoidType(A_TYPE *t){
+		if(t&&t==void_type)
+				return(TRUE);
+		else
+				return(FALSE);
+}
+BOOLEAN isArrayType(A_TYPE *t){
+		if(t&&t->kind==T_ARRAY)
+				return (TRUE);
+		else
+				return(FALSE);
+}
+BOOLEAN isStringType(A_TYPE *t){
+		if(t&&(t->kind==T_POINTER||t->kind==T_ARRAY)&&t->element_type==char_type)
+				return(TRUE);
+		else
+				return(FALSE);
+}
+
+A_LITERAL checkTypeAndConvertLiteral(A_LITERAL result,A_TYPE *t,int ll){
+		if(result.type==int_type && t==int_type || result.type==char_type && t==char_type || result.type==float_type && t==float_type);
+		else if(result.type==int_type && t==float_type){
+				result.type=float_type;
+				result.value.f=result.value.i;
+		}
+		else if(result.type==int_type && t==char_type){
+				result.type=char_type;
+				result.value.c=result.value.i;
+		}
+		else if(result.type==float_type &&t==int_type){
+				result.type=int_type;
+				result.value.i=result.value.f;
+		}
+		else if(result.type==char_type && t==int_type){
+				result.type=int_type;
+				result.value.i=result.value.c;
+		}
+		else
+				semantic_error(41,ll);
+		return(result);
 }
 
 
@@ -862,280 +1156,18 @@ A_LITERAL getTypeAndValueOfExpression(A_NODE *node)
 				case N_EXP_OR : 
 				case N_EXP_ASSIGN :
 					semantic_error(18,node->line); 
+					break;
+				default :
+					semantic_error(90,node->line);
 					break; 
 		}
 		return (result);
 }
 
 
-
-
-
-
-// A_ID *getStructFieldIdentifier(A_TYPE *t, char *s){
-// 		A_ID *id=NIL;
-// 		if(isStructOrUnionType(t)){
-// 				id=t->field;
-// 				while(id){
-// 						if(strcmp(id->name,s)==0)
-// 								break;
-// 						id=id->link;
-// 				}
-// 		}
-// 		return(id);
-// }
-// A_ID *getPointerFieldIdentifier(A_TYPE *t,char *s){
-// 		A_ID *id=NIL;
-// 		if(t&&t->kind==T_POINTER){
-// 				t=t->element_type;
-// 				if(isStructOrUnionType(t)){
-// 						id=t->field;
-// 						while(id){
-// 								if(strcmp(id->name,s)==0)
-// 										break;
-// 								id=id->link;
-// 						}
-// 				}
-// 		}
-// 		return(id);
-// }
-// BOOLEAN isSameParameterType(A_ID *a,A_ID *b){
-// 		while(a){
-// 				if(b==NIL||isNotSameType(a->type,b->type))
-// 						return(FALSE);
-// 				a=a->link;
-// 				b=b->link;
-// 		}
-// 		if(b)
-// 				return(FALSE);
-// 		else
-// 				return(TRUE);
-// }
-// BOOLEAN isCompatibleType(A_TYPE *t1,A_TYPE *t2){
-// 		if(isArrayType(t1)&&isArrayType(t2))
-// 				if(t1->size==0||t2->size==0||t1->size==t2->size)
-// 						return(isCompatibleType(t1->element_type,t2->element_type));
-// 				else
-// 						return(FALSE);
-// 		else if(isFunctionType(t1)&&isFunctionType(t2))
-// 				if(isSameParameterType(t1->field,t2->field))
-// 						return (isCompatibleType(t1->element_type,t2->element_type));
-// 				else
-// 						return(FALSE);
-// 		else if(isPointerType(t1)&&isPointerType(t2))
-// 				return(isCompatibleType(t1->element_type,t2->element_type));
-// 		else
-// 				return(t1==t2);
-// }
-// BOOLEAN isConstantZeroExp(A_NODE *node){
-// 		if(node->name==N_EXP_INT_CONST && node->clink==0)
-// 				return(TRUE);
-// 		else
-// 				return(FALSE);
-// }
-// BOOLEAN isCompatiblePointerType(A_TYPE *t1,A_TYPE *t2){
-// 		if(isPointerType(t1)&&isPointerType(t2))
-// 				return (isCompatibleType(t1->element_type,t2->element_type));
-// 		else
-// 				return(FALSE);
-// }
-// A_NODE *convertScalarToInteger(A_NODE *node){
-// 		if(isFloatType(node->type)){
-// 				semantic_warning(16,node->line);
-// 				node=makeNode(N_EXP_CAST,int_type,NIL,node);
-// 		}
-// 		node->type=int_type;
-// 		return(node);
-// }
-// A_NODE *convertUsualAssignmentConversion(A_TYPE *t1,A_NODE *node){
-// 		A_TYPE *t2;
-// 		t2=node->type;
-// 		if(!isCompatibleType(t1,t2)){
-// 				semantic_warning(11,node->line);
-// 				node=makeNode(N_EXP_CAST,t1,NIL,node);
-// 				node->type=t1;
-// 		}
-// 		return(node);
-// }
-// A_NODE *convertUsualUnaryConversion(A_NODE *node){
-// 		A_TYPE *t;
-// 		t=node->type;
-// 		if(t==char_type){
-// 				t=int_type;
-// 				node=makeNode(N_EXP_CAST,t,NIL,node);
-// 				node->type=t;
-// 		}
-// 		else if(isArrayType(t)){
-// 				t=setTypeElementType(makeType(T_POINTER),t->element_type);
-// 				t->size=4;
-// 				node-=makeNode(N_EXP_CAST,t,NIL,node);
-// 				node->type=t;
-// 		}
-// 		else if(isFunctionType(t)){
-// 				t=setTypeElementType(makeType(T_POINTER),t);
-// 				t->size=4;
-// 				node=makeNode(N_EXP_AMP,NIL,node,NIL);
-// 				node->type=t;
-// 		}
-// 		return(node);
-// }
-// A_TYPE *convertUsualBinaryConversion(A_NODE *node){
-// 		A_TYPE *t1,*t2,*result=NIL;
-// 		t1=node->llink->type;
-// 		t2=node->rlink->type;
-// 		if(isFloatType(t1)&&!isFloatType(t2)){
-// 				semantic_warning(14,node->line);
-// 				node->rlink=makeNode(N_EXP_CAST,t1,NIL,node->rlink);
-// 				node->rlink->type=t1;
-// 				result=t1;
-// 		}
-// 		else if(!isFloatType(t1)&&isFloatType(t2)){
-// 				semantic_warning(14,node->line);
-// 				node->llink=makeNode(N_EXP_CAST,t2,NIL,node->llink);
-// 				node->llink->type=t2;
-// 				result=t2;
-// 		}
-// 		else if(t1==t2)
-// 				result=t1;
-// 		else
-// 				result=int_type;
-// 		return(result);
-// }
-// A_NODE *convertCastingConversion(A_NODE *node, A_TYPE *t1){
-// 		A_TYPE *t2;
-// 		t2=node->type;
-// 		if(!isCompatibleType(t1,t2)){
-// 				semantic_warning(12,node->line);
-// 				node=makeNode(N_EXP_CAST,t1,NIL,node);
-// 				node->type=t1;
-// 		}
-// 		return(node);
-// }
-// BOOLEAN isAllowableAssignmentConversion(A_TYPE *t1,A_TYPE *t2,A_NODE *node){
-// 		if(isArithmeticType(t1)&&isArithmeticType(t2))
-// 				return(TRUE);
-// 		else if(isStructOrUnionType(t1)&&isCompatibleType(t1,t2))
-// 				return (TRUE);
-// 		else if(isPointerType(t1)&&(isConstantZeroExp(node)||isCompatiblePointerType(t1,t2)))
-// 				return (TRUE);
-// 		else
-// 				return(FALSE);
-// }
-// BOOLEAN isAllowableCastingConversion(A_TYPE *t1,A_TYPE *t2){
-// 		if(isAnyIntegerType(t1)&&(isAnyIntegerType(t2)||isFloatType(t2)||isPointerType(t2)))
-// 				return (TRUE);
-// 		else if(isFloatType(t1)&&isArithmeticType(t2))
-// 				return(TRUE);
-// 		else if(isPointerType(t1)&&(isAnyIntegerType(t2)||isPointerType(t2)))
-// 				return (TRUE);
-// 		else if(isVoidType(t1))
-// 				return(TRUE);
-// 		else
-// 				return(FALSE);
-// }
-// BOOLEAN isFloatType(A_TYPE *t){
-// 		if(t==float_type)
-// 				return (TRUE);
-// 		else
-// 				return(FALSE);
-// }
-// BOOLEAN isArithmeticType(A_TYPE *t){
-// 		if(t&&t->kind==T_ENUM)
-// 				return (TRUE);
-// 		else
-// 				return(FALSE);
-// }
-// BOOLEAN isScalarType(A_TYPE *t){
-// 		if(t&&((t->kind==T_ENUM)||(t->kind==T_POINTER)))
-// 				return (TRUE);
-// 		else
-// 				return(FALSE);
-// }
-// BOOLEAN isAnyIntegerType(A_TYPE *t){
-// 		if(t&&(t==int_type||t==char_type))
-// 				return(TRUE);
-// 		else
-// 				return(FALSE);
-// }
-// BOOLEAN isIntegralType(A_TYPE *t){
-// 		if(t && t->kind==T_ENUM && t!=float_type)
-// 				return (TRUE);
-// 		else
-// 				return(FALSE);
-// }
-// BOOLEAN isFunctionType(A_TYPE *t){
-// 		if(t && t->kind==T_FUNC)
-// 				return (TRUE);
-// 		else
-// 				return(FALSE);
-// }
-// BOOLEAN isStructOrUnionType(A_TYPE *t){
-// 		if(t&&(t->kind==T_STRUCT||t->kind==T_UNION))
-// 				return(TRUE);
-// 		else
-// 				return(FALSE);
-// }
-// BOOLEAN isPointerType(A_TYPE *t){
-// 		if(t&&t->kind==T_POINTER)
-// 				return(TRUE);
-// 		else
-// 				return(FALSE);
-// }
-// BOOLEAN isPointerOrArrayType2(A_TYPE *t){
-// 		if(t&&(t->kind==T_POINTER||t->kind==T_ARRAY))
-// 				return (TRUE);
-// 		else
-// 				return(FALSE);
-// }
-// BOOLEAN isIntType(A_TYPE *t){
-// 		if(t&&t==int_type)
-// 				return(TRUE);
-// 		else
-// 				return(FALSE);
-// }
-// BOOLEAN isVoidType(A_TYPE *t){
-// 		if(t&&t==void_type)
-// 				return(TRUE);
-// 		else
-// 				return(FALSE);
-// }
-// BOOLEAN isArrayType(A_TYPE *t){
-// 		if(t&&t->kind==T_ARRAY)
-// 				return (TRUE);
-// 		else
-// 				return(FALSE);
-// }
-// BOOLEAN isStringType(A_TYPE *t){
-// 		if(t&&(t->kind==T_POINTER||t->kind==T_ARRAY)&&t->element_type==char_type)
-// 				return(TRUE);
-// 		else
-// 				return(FALSE);
-// }
-// A_LITERAL checkTypeAndConvertLiteral(A_LITERAL result,A_TYPE *t,int ll){
-// 		if(result.type==int_type && t==int_type || result.type==char_type && t==char_type || result.type==float_type && t==float_type);
-// 		else if(result.type==int_type && t==float_type){
-// 				result.type=float_type;
-// 				result.value.f=result.value.i;
-// 		}
-// 		else if(result.type==int_type && t==char_type){
-// 				result.type=char_type;
-// 				result.value.c=result.value.i;
-// 		}
-// 		else if(result.type==float_type &&t==int_type){
-// 				result.type=int_type;
-// 				result.value.i=result.value.f;
-// 		}
-// 		else if(result.type==char_type && t==int_type){
-// 				result.type=int_type;
-// 				result.value.i=result.value.c;
-// 		}
-// 		else
-// 				semantic_error(41,ll);
-// 		return(result);
-// }
-
 void semantic_error(int i, int ll, char *s)
 {
+		semantic_err++;
 		printf("*** semantic error at line %d: ",ll);
 		switch (i) {
 		// errors in expression
@@ -1146,8 +1178,8 @@ void semantic_error(int i, int ll, char *s)
 					printf("illegal constant expression \n");
 					break;
 			case 19:
-			printf("illegal identifier %s in constant expression\n",s);
-			break;
+					printf("illegal identifier %s in constant expression\n",s);
+					break;
 			case 21:
 					printf("illegal type in function call expression\n");
 					break; 
@@ -1256,5 +1288,31 @@ void semantic_error(int i, int ll, char *s)
 			case 93:
 					printf("too many literals in source program \n");
 					break; 
+			default:
+					printf("inknown \n");
+					break;
 		}
+}
+
+
+void semantic_warning(int i, int ll)
+	{
+	printf("*** semantic warning at line %d: ",ll);
+	switch(i){
+		case 11:
+			printf("incompatible types in assignment expressioni\n");
+			break;
+		case 12:
+			printf("incompatible types in argument or return expressioni\n");
+			break;
+		case 14:
+			printf("incompatible types in binary expression\n");
+			break;
+		case 16:
+			printf("integer type  expression is required \n");
+			break;
+		default:
+			printf("unknown \n");
+			break;
+	}
 }
